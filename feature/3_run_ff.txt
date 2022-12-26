@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --mem=30GB
+#SBATCH --time=3:10:00
+
+module purge
+module load gcc/8.3.0
+module load python/3.9.2
+
+
+python3 /scratch1/xwang350/mnist/feature/Module1_0514_map_abs_fullset_sklearn_hpc.py --dataset mnist --TH1 0.0003 --TH2 0.00015

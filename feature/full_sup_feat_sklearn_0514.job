@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH --partition=epyc-64
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64GB
+#SBATCH --time=2:00:00
+#SBATCH --account=jckuo_84
+
+module purge
+eval "$(conda shell.bash hook)"
+
+conda activate clf
+
+python3 /scratch2/yijingya/weak_sup/script/feature/Module1_0514_map_abs_fullset_sklearn_hpc.py --dataset mnist --TH1 0.0003 --TH2 0.00015
