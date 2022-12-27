@@ -4,8 +4,8 @@ from framework.cwSaab import cwSaab
 import pickle
 
 class Pixelhop(cwSaab):
-    def __init__(self, depth=1, TH1=0.005, TH2=0.001, SaabArgs=None, shrinkArgs=None, concatArg=None):
-        super().__init__(depth=depth, TH1=TH1, TH2=TH2, SaabArgs=SaabArgs, shrinkArgs=shrinkArgs)
+    def __init__(self, depth=1, TH1=0.005, TH2=0.001, SaabArgs=None, shrinkArgs=None, concatArg=None, DCAC= False):
+        super().__init__(depth=depth, TH1=TH1, TH2=TH2, SaabArgs=SaabArgs, shrinkArgs=shrinkArgs, DCAC = DCAC)
         self.TH1 = TH1
         #how to get an adaptive TH2? -> in cwSaab!
         self.TH2 = TH2

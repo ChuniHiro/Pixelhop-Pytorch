@@ -19,6 +19,7 @@ def MaxPooling(Xinput, win=2, stride=1, padding=0):
         Xinput = np.pad(Xinput, ((0,0), (padding,padding), (padding,padding), (0,0)),'constant')
     ch= Xinput.shape[-1]
     X_w = view_as_windows(Xinput, (1,win,win,ch), (1,stride,stride,ch))
+    X_w = abs(X_w)
     # 0 - 3 patch_idx
     # 4 - 7 patches
     X_w = X_w.max(axis=(5, 6))

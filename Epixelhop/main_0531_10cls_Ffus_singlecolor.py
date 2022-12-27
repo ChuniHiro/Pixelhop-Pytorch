@@ -62,7 +62,7 @@ warnings.filterwarnings("ignore")
 # flags.DEFINE_string("root3", '/media/bingbing/MyData/ICPR_CIFAR/baseline_result/cwsaab_cifar10_0109_10cls_3x3_eecR/', "root")
 
 # flags.DEFINE_string("root", '/media/bingbing/MyData/ICPR_CIFAR/baseline_result/cwsaab_cifar_0515_AUG8/cwsaab_cifar_0515_AUG8', "root")
-flags.DEFINE_string("root", '/media/hongyu/SSD/SSDUBUNTU/WUSL/Pixelhop-Pytorch/Epixelhop/', "root")
+flags.DEFINE_string("root", '/media/hongyu/SSD/SSDUBUNTU/WUSL/Pixelhop-Pytorch/Epixelhop/save', "root")
 # flags.DEFINE_string("root", '/mnt/yijing/cifar/cwsaab_cifar10_0310_3x3_AUG_35_img_', "root")
 
 flags.DEFINE_string("subroot", 'P', "root")

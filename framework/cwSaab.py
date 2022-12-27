@@ -24,7 +24,7 @@ def gc_invoker(func):
 
 class cwSaab():
     
-    def __init__(self, depth=1, TH1=0.01, TH2=0.005, SaabArgs=None, shrinkArgs=None):
+    def __init__(self, depth=1, TH1=0.01, TH2=0.005, SaabArgs=None, shrinkArgs=None, DCAC = False):
         self.par = {}
         self.bias = {}
         assert (depth > 0), "'depth' must > 0!"
@@ -42,6 +42,7 @@ class cwSaab():
         self.split = False
         self.transformstart = 0 # use for intermediate transform
         self.transformstop = self.depth # use for intermediate transform
+        self.DCAC = DCAC
         if depth > np.min([len(SaabArgs), len(shrinkArgs)]):
             self.depth = np.min([len(SaabArgs), len(shrinkArgs)])
             print("       <WARNING> Too few 'SaabArgs/shrinkArgs' to get depth %s, \
@@ -70,7 +71,10 @@ class cwSaab():
         # print('check point 1')
         transformed = saab.transform(X)
         transformed = transformed.reshape(S[0],S[1],S[2],-1)
-        transformed = transformed[:, :, :, saab.Energy>=self.TH1]
+        if not self.DCAC:
+            transformed = transformed[:, :, :, saab.Energy>=self.TH1] # is this wrong?
+        # print("keep DC AC1?:", self.DCAC)
+        # print(transformed.shape)
         
         # why doing this??
 #         if train==True and self.SaabArgs[layer]['cw'] == True:
@@ -133,7 +137,7 @@ class cwSaab():
             bias_cur = []
         else:
             saab_cur = self.par['Layer'+str(0)]
-            bias_cur = self.bias['Layer'+str(0)]
+            # bias_cur = self.bias['Layer'+str(0)]
         transformed, eng, DC = [], [], []
         
         if self.SaabArgs[0]['cw'] == True:
@@ -149,7 +153,8 @@ class cwSaab():
                     # print("find DC energy here")
                     # print(saab.Energy)
                     # self.adaptiveTH1.append(saab.Energy[0])
-                    saab = self.discard_nodes(saab)
+                    if not self.DCAC:
+                        saab = self.discard_nodes(saab)
                     saab_cur.append(saab)
                     # bias_cur.append(saab.Bias_current)#*np.ones(saab.Energy.size))
                     eng.append(saab.Energy)
@@ -177,7 +182,7 @@ class cwSaab():
                 
         if train == True:
             self.par['Layer0'] = saab_cur
-            self.bias['Layer'+str(0)] = bias_cur
+            # self.bias['Layer'+str(0)] = bias_cur
             self.Energy['Layer0'] = eng
           
         # print("check adaptive energy", self.adaptiveTH1)
@@ -197,27 +202,42 @@ class cwSaab():
             
             S[-1] = 1
             X = np.moveaxis(X, -1, 0)
-
+            # print("debug ct: X shape")
+            # print(X.shape)
+            print("in cwsaab_n_layer, current #Saab:", len(saab_prev))
+            print("check input X:",X.shape)
             for i in range(len(saab_prev)):
 
-
+                ct = -1
+                print("in channel", i, "Energy:", saab_prev[i].Energy.shape[0])
                 for j in range(saab_prev[i].Energy.shape[0]):
                     
-                    if saab_prev[i].Energy[j] < self.TH1:
-                        # it is a leaf node
-                        continue
-                    else: 
-                        # intermediate node
-                        # need further splitting
+                    if self.DCAC:
+                        
                         ct += 1
+                        if ct >= 2:
+                            break
+                    else:
+                        
+                        if saab_prev[i].Energy[j] < self.TH1:
+                            # it is a leaf node
+                            continue
+                        else: 
+                            # intermediate node
+                            # need further splitting
+                            ct += 1
                         
                     self.split = True
-                    X_tmp = X[ct].reshape(S)
+                    if self.DCAC:
+                        X_tmp = X[ct + i * 10].reshape(S)
+                    else:   
+                        X_tmp = X[ct].reshape(S)
                     # print("check energy:",ct,saab_prev[i].Energy[j])
                     saab = self.SaabFit(X_tmp, layer=layer)
 #                     saab = self.SaabFit(X_tmp, layer=layer, bias=bias_prev[i])
                     saab.Energy *= saab_prev[i].Energy[j]
-                    saab = self.discard_nodes(saab) # discard nodes with E < th2
+                    if not self.DCAC:
+                        saab = self.discard_nodes(saab) # discard nodes with E < th2
                     saab_cur.append(saab)
                     # no bias 08/31/21
 #                     bias_cur.append(saab.Bias_current)#*np.ones(saab.Energy.size))
@@ -236,20 +256,30 @@ class cwSaab():
 #             print(X.shape)
             for i in range(len(saab_prev)):
                 
+                ct = -1
 #                 print("debug saab transform energy shape:", saab_prev[i].Energy.shape[0],\
 #                       'for previous channel',i)
                 for j in range(saab_prev[i].Energy.shape[0]):
                     
-                    # only transform intermediate nodes
-                    if saab_prev[i].Energy[j] < self.TH1:
-                        # it is a leaf node
-                        # discardchannel += 1
-#                         print("discarded:",saab_prev[i].Energy[j], self.adaptiveTH1[-1])
-                        continue
-                    else:
-                        # intermediate node
+                    if self.DCAC:
+                        
                         ct += 1
-                    X_tmp = X[ct].reshape(S)
+                        if ct >= 2:
+                            break
+                    else:
+                        # only transform intermediate nodes
+                        if saab_prev[i].Energy[j] < self.TH1:
+                            # it is a leaf node
+                            # discardchannel += 1
+    #                         print("discarded:",saab_prev[i].Energy[j], self.adaptiveTH1[-1])
+                            continue
+                        else:
+                            # intermediate node
+                            ct += 1
+                    if self.DCAC:
+                        X_tmp = X[ct + i * 10].reshape(S)
+                    else:
+                        X_tmp = X[ct].reshape(S)
 #                     print(ct, pidx)
                     out_tmp = self.SaabTransform(X_tmp, saab=saab_cur[pidx], layer=layer, train=True)
 #                     print('check output_tmp:',out_tmp.shape)
@@ -311,12 +341,13 @@ class cwSaab():
             # t0 = time.time()
             # print('time for loop here:', X.shape)
             saab_prev_len = len(saab_prev)
-#             print("check saab_prev_len", saab_prev_len)
-            for i in range(saab_prev_len):
+            # print("check saab_prev_len", saab_prev_len)
+            for i in range(saab_prev_len): # for each channel in previous hop
                 
                 lenj = saab_prev[i].Energy.shape[0]
+                ct = -1
 #                 print("for i = ", i, "lenj",lenj)
-                for j in range(lenj):
+                for j in range(lenj): # 
                     
                     # print('test')
                     # print(saab_prev[:])
@@ -325,17 +356,28 @@ class cwSaab():
 #                     print("check discarding:", saab_prev[i].Energy[j], self.adaptiveTH1[layer-1], layer)
                     # Bug fixed : this should be the threshold from previous layer!!
                     # threshold = max(self.adaptiveTH1[layer-1], self.TH1)
-                    if saab_prev[i].Energy[j] < self.TH1:
-                        # it is a leaf node
-#                         discardchannel += 1
-                        continue
+                    
+                    # print('saab_prev[i].Energy[j]', i, j , saab_prev[i].Energy[j])
+                    if self.DCAC:
+                        
+                        ct += 1
+                        if ct >= 2:
+                            break
                     else:
-                        ct+=1
+                        
+                        if saab_prev[i].Energy[j] < self.TH1:
+                            # it is a leaf node
+    #                         discardchannel += 1
+                            continue
+                        else:
+                            ct+=1
 
                         
                     self.split = True
-                    
-                    X_tmp = X[ct].reshape(S)
+                    if self.DCAC:
+                        X_tmp = X[ct + i * 10].reshape(S)
+                    else:
+                        X_tmp = X[ct].reshape(S)
                     out_tmp = self.SaabTransform(X_tmp, saab=saab_cur[pidx], layer=layer)
                     pidx += 1
                     output.append(out_tmp)
@@ -363,6 +405,7 @@ class cwSaab():
         for i in range(1, self.depth):
             
             print('=' * 45 + f'>c/w Saab Train Hop {i}')
+            print("check input featmap:", X.shape)
             X = self.cwSaab_n_layer_train(X, train = True, layer = i)
             if self.shrinkArgs[i]['pooling'] != 0:
 
