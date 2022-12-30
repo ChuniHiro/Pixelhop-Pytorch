@@ -5,10 +5,10 @@
 #
 import numpy as np 
 import pickle, gc, time
-from framework.saab import Saab
+from framework_DCAC.saab import Saab
 # from numba import jit
 # from numba import njit
-from framework.layer import *
+from framework_DCAC.layer import *
 import time
 
 
@@ -24,7 +24,7 @@ def gc_invoker(func):
 
 class cwSaab():
     
-    def __init__(self, depth=1, TH1=0.01, TH2=0.005, SaabArgs=None, shrinkArgs=None):
+    def __init__(self, depth=1, TH1=0.01, TH2=0.005, SaabArgs=None, shrinkArgs=None, DCAC = False):
         self.par = {}
         self.bias = {}
         assert (depth > 0), "'depth' must > 0!"
@@ -42,6 +42,7 @@ class cwSaab():
         self.split = False
         self.transformstart = 0 # use for intermediate transform
         self.transformstop = self.depth # use for intermediate transform
+        self.DCAC = DCAC
         if depth > np.min([len(SaabArgs), len(shrinkArgs)]):
             self.depth = np.min([len(SaabArgs), len(shrinkArgs)])
             print("       <WARNING> Too few 'SaabArgs/shrinkArgs' to get depth %s, \
@@ -70,8 +71,9 @@ class cwSaab():
         # print('check point 1')
         transformed = saab.transform(X)
         transformed = transformed.reshape(S[0],S[1],S[2],-1)
-        transformed = transformed[:, :, :, saab.Energy>=self.TH1]
-        
+        # transformed = transformed[:, :, :, saab.Energy>=self.TH1]
+        if not self.DCAC:
+            transformed = transformed[:, :, :, saab.Energy>=self.TH1]
         # why doing this??
 #         if train==True and self.SaabArgs[layer]['cw'] == True:
 #             transformed = transformed[:, :, :, saab.Energy>=self.TH1]
@@ -149,7 +151,8 @@ class cwSaab():
                     # print("find DC energy here")
                     # print(saab.Energy)
                     # self.adaptiveTH1.append(saab.Energy[0])
-                    saab = self.discard_nodes(saab)
+                    if not self.DCAC:
+                        saab = self.discard_nodes(saab)
                     saab_cur.append(saab)
                     # bias_cur.append(saab.Bias_current)#*np.ones(saab.Energy.size))
                     eng.append(saab.Energy)
@@ -200,24 +203,35 @@ class cwSaab():
 
             for i in range(len(saab_prev)):
 
-
+                ct = -1
                 for j in range(saab_prev[i].Energy.shape[0]):
                     
-                    if saab_prev[i].Energy[j] < self.TH1:
-                        # it is a leaf node
-                        continue
-                    else: 
-                        # intermediate node
-                        # need further splitting
+                    if self.DCAC:
+                        
                         ct += 1
+                        if ct >= 2:
+                            break
+                    else:
+                        if saab_prev[i].Energy[j] < self.TH1:
+                            # it is a leaf node
+                            continue
+                        else: 
+                            # intermediate node
+                            # need further splitting
+                            ct += 1
                         
                     self.split = True
-                    X_tmp = X[ct].reshape(S)
+                    if self.DCAC:
+                        X_tmp = X[ct + i * 10].reshape(S)
+                    else:   
+                        X_tmp = X[ct].reshape(S)
                     # print("check energy:",ct,saab_prev[i].Energy[j])
                     saab = self.SaabFit(X_tmp, layer=layer)
 #                     saab = self.SaabFit(X_tmp, layer=layer, bias=bias_prev[i])
                     saab.Energy *= saab_prev[i].Energy[j]
-                    saab = self.discard_nodes(saab) # discard nodes with E < th2
+                    if not self.DCAC:
+                        saab = self.discard_nodes(saab)
+                    # saab = self.discard_nodes(saab) # discard nodes with E < th2
                     saab_cur.append(saab)
                     # no bias 08/31/21
 #                     bias_cur.append(saab.Bias_current)#*np.ones(saab.Energy.size))
@@ -238,18 +252,28 @@ class cwSaab():
                 
 #                 print("debug saab transform energy shape:", saab_prev[i].Energy.shape[0],\
 #                       'for previous channel',i)
+                ct = -1
                 for j in range(saab_prev[i].Energy.shape[0]):
                     
-                    # only transform intermediate nodes
-                    if saab_prev[i].Energy[j] < self.TH1:
-                        # it is a leaf node
-                        # discardchannel += 1
-#                         print("discarded:",saab_prev[i].Energy[j], self.adaptiveTH1[-1])
-                        continue
-                    else:
-                        # intermediate node
+                    if self.DCAC:
+                        
                         ct += 1
-                    X_tmp = X[ct].reshape(S)
+                        if ct >= 2:
+                            break
+                    else:
+                        # only transform intermediate nodes
+                        if saab_prev[i].Energy[j] < self.TH1:
+                            # it is a leaf node
+                            # discardchannel += 1
+    #                         print("discarded:",saab_prev[i].Energy[j], self.adaptiveTH1[-1])
+                            continue
+                        else:
+                            # intermediate node
+                            ct += 1
+                    if self.DCAC:
+                        X_tmp = X[ct + i * 10].reshape(S)
+                    else:
+                        X_tmp = X[ct].reshape(S)
 #                     print(ct, pidx)
                     out_tmp = self.SaabTransform(X_tmp, saab=saab_cur[pidx], layer=layer, train=True)
 #                     print('check output_tmp:',out_tmp.shape)
@@ -315,6 +339,8 @@ class cwSaab():
             for i in range(saab_prev_len):
                 
                 lenj = saab_prev[i].Energy.shape[0]
+                lenj = saab_prev[i].Energy.shape[0]
+                ct = -1
 #                 print("for i = ", i, "lenj",lenj)
                 for j in range(lenj):
                     
@@ -325,12 +351,18 @@ class cwSaab():
 #                     print("check discarding:", saab_prev[i].Energy[j], self.adaptiveTH1[layer-1], layer)
                     # Bug fixed : this should be the threshold from previous layer!!
                     # threshold = max(self.adaptiveTH1[layer-1], self.TH1)
-                    if saab_prev[i].Energy[j] < self.TH1:
-                        # it is a leaf node
-#                         discardchannel += 1
-                        continue
+                    if self.DCAC:
+                        
+                        ct += 1
+                        if ct >= 2:
+                            break
                     else:
-                        ct+=1
+                        if saab_prev[i].Energy[j] < self.TH1:
+                            # it is a leaf node
+    #                         discardchannel += 1
+                            continue
+                        else:
+                            ct+=1
 
                         
                     self.split = True

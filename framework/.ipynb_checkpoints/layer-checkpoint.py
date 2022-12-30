@@ -15,7 +15,7 @@ def myResize(x, H, W):
 def MaxPooling(Xinput, win=2, stride=1, padding=0):
 
     if padding:
-        padding = win//2
+        padding = kernel_size//2
         Xinput = np.pad(Xinput, ((0,0), (padding,padding), (padding,padding), (0,0)),'constant')
     ch= Xinput.shape[-1]
     X_w = view_as_windows(Xinput, (1,win,win,ch), (1,stride,stride,ch))
